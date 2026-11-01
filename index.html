@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Regular Language Closure Operations Simulator</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><b class="logo">DFA·Closure</b>
+  <nav><button data-tab="home">Home</button><button data-tab="sim">Simulator</button><button data-tab="theory">Theory</button></nav></header>
+<main>
+<section id="home" class="tab">
+  <h1>Regular Language Closure Operations Simulator</h1>
+  <p class="lead">CSET302 · Automata Theory and Computability. Define two DFAs, pick an operation, and watch the resulting DFA being constructed — then test strings against it.</p>
+  <div class="cards" id="opcards"></div>
+  <button class="primary big" id="start">Start Simulator →</button>
+</section>
+
+<section id="sim" class="tab" hidden>
+  <div class="grid2">
+    <div class="card"><h2>Machine A</h2><div id="edA" class="editor"></div></div>
+    <div class="card" id="cardB"><h2>Machine B</h2><div id="edB" class="editor"></div></div>
+  </div>
+  <div class="card"><h2>Operation</h2><div id="opsel" class="seg"></div><p id="opdesc" class="muted"></p><div id="msg"></div></div>
+  <div id="result" hidden>
+    <div class="card"><h2 id="restitle">Resulting DFA</h2><div id="stats" class="stats"></div>
+      <div class="gwrap scroll"><svg id="svg" class="graph"></svg></div><p class="muted">Double circle = final (accepting) state, arrow in = start state. Scroll inside the box to see the whole graph.</p></div>
+    <div class="card"><h2>Transition table</h2><div id="table" class="scroll"></div></div>
+        <div class="card"><h2>Test a string</h2>
+      <div class="row"><input id="str" placeholder="e.g. 101  (empty = ε)"><button id="run" class="primary">Test</button></div>
+      <div id="samples" class="chips"></div><div id="trace"></div></div>
+  </div>
+</section>
+
+<section id="theory" class="tab" hidden>
+  <h1>Theory &amp; comparison</h1>
+  <div class="card"><p>Regular languages are closed under all four operations. Union, intersection and difference use the <b>product construction</b>: states are pairs (qA, qB), start state is (startA, startB), and δ((p,q),a) = (δA(p,a), δB(q,a)). Only reachable pairs are generated (BFS). Complement flips accepting states of a <i>complete</i> DFA and is taken relative to Σ*.</p>
+  <div class="scroll"><table class="t"><tr><th>Operation</th><th>Language</th><th>Construction</th><th>Accepting states</th></tr>
+  <tr><td>Union</td><td>L(A) ∪ L(B)</td><td>Product</td><td>qA ∈ F_A <b>OR</b> qB ∈ F_B</td></tr>
+  <tr><td>Intersection</td><td>L(A) ∩ L(B)</td><td>Product</td><td>qA ∈ F_A <b>AND</b> qB ∈ F_B</td></tr>
+  <tr><td>Complement</td><td>Σ* − L(A)</td><td>Same DFA</td><td>Q − F_A (swap)</td></tr>
+  <tr><td>Difference</td><td>L(A) − L(B)</td><td>Product</td><td>qA ∈ F_A <b>AND NOT</b> qB ∈ F_B</td></tr></table></div></div>
+</section>
+
+</main>
+<script src="graph.js"></script><script src="script.js"></script>
+</body></html>
