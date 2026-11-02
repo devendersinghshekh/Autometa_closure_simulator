@@ -33,6 +33,9 @@ def validate(m, name):
         errors.append(f"{name}: add at least one state.")
     elif m["start"] not in m["states"]:
         errors.append(f"{name}: select a start state.")
+    bad = [s for s in m["states"] if any(c in s for c in "(),")]
+    if bad:  # these characters are used to name product pairs "(p, q)" and would make names collide
+        errors.append(f"{name}: state names may not contain '(', ')' or ',' ({fmt(bad)}).")
     for s in m["states"]:
         for a, t in m["delta"].get(s, {}).items():
             if a in m["alphabet"] and t not in m["states"]:
@@ -90,6 +93,22 @@ def complement(A):
     return m
 
 
+def shortest(m, accepted=True):
+    """BFS from the start state: the shortest string that ends in an accepting state
+    (accepted=True) or a non-accepting state (accepted=False). None = no such string,
+    i.e. the language is empty (resp. equals Σ*)."""
+    seen, queue = {m["start"]: ""}, [m["start"]]
+    for s in queue:                                    # the list is also the queue
+        if (s in m["accept"]) == accepted:
+            return seen[s]
+        for a in m["alphabet"]:
+            t = m["delta"][s][a]
+            if t not in seen:
+                seen[t] = seen[s] + a
+                queue.append(t)
+    return None
+
+
 # ---------------------------------------------------------------- explanation
 def fmt(items):
     return "{" + ", ".join(esc(x) for x in items) + "}"
@@ -109,7 +128,8 @@ def table_html(m):
 # ---------------------------------------------------------------- main entry points
 def build(A, B, op):
     """Validate, complete, construct. Returns {"errors": [...]} or
-    {"machine", "table_html", "notes"}."""
+    {"machine", "table_html", "notes", "parts", "info"}. "parts" are the completed input
+    machines (so strings can also be run on A and B); "info" holds language facts."""
     errors = validate(A, "Machine A")
     if op != "complement":
         errors += validate(B, "Machine B")
@@ -124,13 +144,14 @@ def build(A, B, op):
     if dead_a:
         notes.append(f"Machine A had missing transitions, so it was completed with a non-accepting trap state '{dead_a}'.")
     if op == "complement":
-        R = complement(A)
+        R, parts, pairs = complement(A), {"A": A}, None
     else:
         B, dead_b = complete(B)
         if dead_b:
             notes.append(f"Machine B had missing transitions, so it was completed with a non-accepting trap state '{dead_b}'.")
-        R = product(A, B, op)
-    return {"machine": R, "table_html": table_html(R), "notes": notes}
+        R, parts, pairs = product(A, B, op), {"A": A, "B": B}, len(A["states"]) * len(B["states"])
+    info = {"pairs": pairs, "accepted": shortest(R, True), "rejected": shortest(R, False)}
+    return {"machine": R, "table_html": table_html(R), "notes": notes, "parts": parts, "info": info}
 
 
 def run(m, text):

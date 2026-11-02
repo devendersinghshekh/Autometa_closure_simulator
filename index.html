@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Regular Language Closure Operations Simulator</title><link rel="stylesheet" href="style.css"></head>
+<title>Regular Language Closure Operations Simulator</title><meta name="color-scheme" content="light dark"><link rel="stylesheet" href="style.css"></head>
 <body>
-<header><b class="logo">DFA·Closure</b>
+<header><b class="logo"><span class="dot"></span>DFA·Closure</b>
   <nav><button data-tab="home">Home</button><button data-tab="sim">Simulator</button><button data-tab="theory">Theory</button></nav></header>
 <main>
 <section id="home" class="tab">
@@ -14,15 +14,15 @@
 
 <section id="sim" class="tab" hidden>
   <div class="grid2">
-    <div class="card"><h2>Machine A</h2><div id="edA" class="editor"></div></div>
-    <div class="card" id="cardB"><h2>Machine B</h2><div id="edB" class="editor"></div></div>
+    <div class="card"><h2>Machine A</h2><div id="edA" class="editor"></div><div class="gwrap mini"><svg id="svgA" class="graph"></svg></div></div>
+    <div class="card" id="cardB"><h2>Machine B</h2><div id="edB" class="editor"></div><div class="gwrap mini"><svg id="svgB" class="graph"></svg></div></div>
   </div>
   <div class="card"><h2>Operation</h2><div id="opsel" class="seg"></div><p id="opdesc" class="muted"></p><div id="msg"></div></div>
   <div id="result" hidden>
-    <div class="card"><h2 id="restitle">Resulting DFA</h2><div id="stats" class="stats"></div>
+    <div class="card"><h2 id="restitle">Resulting DFA</h2><div id="stats" class="stats"></div><div id="lang"></div>
       <div class="gwrap scroll"><svg id="svg" class="graph"></svg></div><p class="muted">Double circle = final (accepting) state, arrow in = start state. Scroll inside the box to see the whole graph.</p></div>
     <div class="card"><h2>Transition table</h2><div id="table" class="scroll"></div></div>
-        <div class="card"><h2>Test a string</h2>
+    <div class="card"><h2>Test a string</h2>
       <div class="row"><input id="str" placeholder="e.g. 101  (empty = ε)"><button id="run" class="primary">Test</button></div>
       <div id="samples" class="chips"></div><div id="trace"></div></div>
   </div>

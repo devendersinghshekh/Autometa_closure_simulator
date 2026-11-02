@@ -47,6 +47,30 @@ class Tests(unittest.TestCase):
         other = dict(EX[1], alphabet=["0", "1", "2"])
         self.assertIn("errors", L.build(EX[0], other, "union"))
         self.assertIn("errors", L.build({**EX[0], "start": ""}, EX[1], "union"))
+        bad = {**EX[0], "states": ["q0", "(q1"], "accept": ["(q1"]}            # would collide with pair names
+        self.assertIn("errors", L.build(bad, EX[1], "union"))
+
+    def test_other_alphabet(self):
+        # over {a, b}: A = "has an a", B = "ends in b" (B has a missing transition -> trap state)
+        A = {"states": ["n", "y"], "alphabet": ["a", "b"], "start": "n", "accept": ["y"],
+             "delta": {"n": {"a": "y", "b": "n"}, "y": {"a": "y", "b": "y"}}}
+        B = {"states": ["s", "e"], "alphabet": ["b", "a"], "start": "s", "accept": ["e"],
+             "delta": {"s": {"a": "s", "b": "e"}, "e": {"b": "e"}}}
+        words = [""] + ["".join(t) for n in range(1, 6) for t in itertools.product("ab", repeat=n)]
+        for op, f in LOGIC.items():
+            out = L.build(A, B, op)
+            Ac, Bc = out["parts"]["A"], out["parts"]["B"]
+            for s in words:
+                self.assertEqual(acc(out["machine"], s), f(acc(Ac, s), acc(Bc, s)), (op, s))
+
+    def test_language_info(self):
+        info = L.build(EX[1], None, "complement")["info"]          # odd number of 1s
+        self.assertEqual((info["accepted"], info["rejected"], info["pairs"]), ("1", "", None))
+        empty = L.build(EX[0], L.build(EX[0], None, "complement")["machine"], "intersection")["info"]
+        self.assertIsNone(empty["accepted"])                        # L ∩ complement(L) = ∅
+        full = L.build(EX[0], L.build(EX[0], None, "complement")["machine"], "union")["info"]
+        self.assertIsNone(full["rejected"])                         # L ∪ complement(L) = Σ*
+        self.assertEqual(L.build(EX[0], EX[2], "union")["info"]["pairs"], 6)
 
 
 if __name__ == "__main__":

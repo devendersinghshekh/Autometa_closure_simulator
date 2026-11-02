@@ -7,14 +7,17 @@ const post = (url, body) => fetch(url, { method: 'POST', body: JSON.stringify(bo
 const OPINFO = {
   union: ['A ∪ B', 'Accepted if A or B accepts. Product construction, accept when qA ∈ F_A OR qB ∈ F_B.'],
   intersection: ['A ∩ B', 'Accepted only if both accept. Product construction, accept when qA ∈ F_A AND qB ∈ F_B.'],
-  complement: ['A̅', 'Accepted if A rejects (relative to Σ). Same DFA with accepting states swapped. Only Machine A is used.'],
+  complement: ['A̅', 'Accepted if A rejects (relative to Σ*). Same DFA with accepting states swapped. Only Machine A is used.'],
   difference: ['A − B', 'Accepted if A accepts and B rejects. Product construction, accept when qA ∈ F_A AND qB ∉ F_B.'],
 };
 const emptyM = () => ({ states: [], alphabet: ['0', '1'], start: '', accept: [], delta: {} });
-let EXAMPLES = [], edA, edB, op = 'union', res = null, graph = null, timer = null, seq = 0;
+let EXAMPLES = [], edA, edB, op = 'union', res = null, parts = null, graph = null, gIn = {}, timer = null, seq = 0;
+const eps = s => s === '' ? 'ε' : s;
+/* strings over Σ in length-then-alphabet order: ε, a, b, aa, ab, … */
+function samples(alpha, n) { const out = [''], q = ['']; while (out.length < n && q.length) { const w = q.shift(); if (w.length >= 4) break; for (const a of alpha) { q.push(w + a); out.push(w + a); } } return out.slice(0, n); }
 
 /* ---------- DFA editor: only edits the machine data; accepting states are exactly the ticked boxes ---------- */
-function Editor(root, onChange, init) {
+function Editor(root, onChange, init, copyFrom) {
   let m = clone(init);
   const set = x => { m = x; render(); onChange(); };
   function render() {
@@ -28,6 +31,7 @@ function Editor(root, onChange, init) {
     <p class="muted">Final states: <b>${fmt(m.accept)}</b> · "(none)" = no transition (treated as a trap state)</p>
     <div class="row"><button class="add">+ State</button>
       <select class="ex"><option value="">Load example…</option>${EXAMPLES.map((e, i) => `<option value="${i}">${esc(e.name)}</option>`).join('')}</select>
+      ${copyFrom ? '<button class="copy" title="Use the same alphabet as Machine A">Copy Σ from A</button>' : ''}
       <button class="reset">Reset</button></div>`;
   }
   root.addEventListener('change', ev => {
@@ -54,14 +58,17 @@ function Editor(root, onChange, init) {
       m.accept = m.accept.filter(x => x !== s); if (m.start === s) m.start = '';
       for (const q in m.delta) for (const a in m.delta[q]) if (m.delta[q][a] === s) delete m.delta[q][a];
       render(); onChange();
-    } else if (c.classList.contains('reset')) set(emptyM());
+    } else if (c.classList.contains('copy')) { m.alphabet = [...copyFrom()]; render(); onChange(); }
+    else if (c.classList.contains('reset')) set(emptyM());
   });
   render();
   return { get: () => m };
 }
 
 /* ---------- navigation & operation selection ---------- */
-function showTab(t) { document.querySelectorAll('.tab').forEach(s => s.hidden = s.id !== t); document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); }
+function showTab(t) { history.replaceState(null, '', '#' + t);
+  if (t === 'sim') setTimeout(drawAll);  /* SVG sizes are only measurable once the tab is visible */
+  document.querySelectorAll('.tab').forEach(s => s.hidden = s.id !== t); document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 $('#start').onclick = () => showTab('sim');
 for (const k in OPINFO) {
@@ -76,8 +83,14 @@ function selectOp(k) {
 document.querySelectorAll('#opcards .op').forEach(c => c.onclick = () => { showTab('sim'); selectOp(c.dataset.op); });
 document.querySelectorAll('#opsel button').forEach(b => b.onclick = () => selectOp(b.dataset.op));
 
+/* ---------- drawing: the two input machines (as edited, possibly incomplete) and the result ---------- */
+function drawInputs() { if (edA) gIn = { A: Graph.draw($('#svgA'), edA.get()), B: Graph.draw($('#svgB'), edB.get()) }; }
+function drawAll() { drawInputs(); if (res && !$('#result').hidden) graph = Graph.draw($('#svg'), res); }
+
 /* ---------- build (Python does the work) ---------- */
 async function rebuild() {
+  clearTimeout(timer);                                             // stop any trace animation of the old machine
+  drawInputs();
   const id = ++seq, r = await post('/api/build', { A: edA.get(), B: edB.get(), op });
   if (id !== seq) return;                                          // a newer request replaced this one
   $('#result').hidden = !!r.errors;
@@ -85,30 +98,42 @@ async function rebuild() {
     : r.notes.map(n => `<div class="note">${esc(n)}</div>`).join('');
   if (r.errors) return;
   $('#restitle').textContent = `Resulting DFA — ${op[0].toUpperCase() + op.slice(1)} (${OPINFO[op][0]})`;
-  res = r.machine; graph = Graph.draw($('#svg'), res);
-  $('#stats').innerHTML = `<span>States: <b>${res.states.length}</b></span><span>Accepting: <b>${res.accept.length}</b></span><span>Σ = <b>${fmt(res.alphabet)}</b></span><span>Start: <b>${esc(res.start)}</b></span>`;
+  res = r.machine; parts = r.parts; graph = Graph.draw($('#svg'), res);
+  const { pairs, accepted, rejected } = r.info;
+  $('#stats').innerHTML = `<span>States: <b>${res.states.length}</b>${pairs ? ` <small>reachable, of ${pairs} = |Q<sub>A</sub>|·|Q<sub>B</sub>| possible pairs</small>` : ''}</span>
+    <span>Accepting: <b>${res.accept.length}</b></span><span>Σ = <b>${fmt(res.alphabet)}</b></span><span>Start: <b>${esc(res.start)}</b></span>`;
+  $('#lang').innerHTML = accepted === null ? '<div class="note"><b>L = ∅</b> — no string is accepted (no accepting state is reachable).</div>'
+    : rejected === null ? '<div class="note"><b>L = Σ*</b> — every string is accepted (no rejecting state is reachable).</div>'
+    : `<p class="muted">Shortest accepted: <button class="chip ok-chip">${esc(eps(accepted))}</button> · shortest rejected: <button class="chip err-chip">${esc(eps(rejected))}</button></p>`;
   $('#table').innerHTML = r.table_html;
-  $('#samples').innerHTML = ['', '0', '1', '10', '101', '0110', '0000', '11111'].map(s => `<button class="chip">${s || 'ε'}</button>`).join('');
+  $('#samples').innerHTML = samples(res.alphabet, 10).map(s => `<button class="chip">${esc(eps(s))}</button>`).join('');
   $('#trace').innerHTML = '';
 }
 /* ---------- string testing: path computed by Python, animated here ---------- */
 async function testString(str) {
-  clearTimeout(timer); const r = await post('/api/run', { machine: res, text: str }), out = $('#trace');
+  clearTimeout(timer); if (!res) return;
+  const names = Object.keys(parts), out = $('#trace');
+  const [r, ...pr] = await Promise.all([res, ...names.map(k => parts[k])].map(machine => post('/api/run', { machine, text: str })));
   if (r.error) { out.innerHTML = `<div class="err">${esc(r.error)}</div>`; return; }
+  const mark = ok => `<span class="${ok ? 'okc' : 'errc'}">${ok ? '✓ accepts' : '✗ rejects'}</span>`;
+  const why = names.map((k, i) => `${k}: ${mark(pr[i].accepted)}`).join(' · ') + ` → ${OPINFO[op][0]}: ${mark(r.accepted)}`;
   const rows = [`Start → <b>${esc(res.start)}</b>`, ...r.syms.map((c, i) => `Read <code>${esc(c)}</code> → <b>${esc(r.path[i + 1])}</b>`)];
   out.innerHTML = `<p class="muted">Input: ${r.syms.length ? esc(str) : 'ε (empty string)'}</p><ol class="trace" start="0"></ol><div id="verdict"></div>`;
   let i = 0;
   (function tick() {
     $('.trace').insertAdjacentHTML('beforeend', `<li>${rows[i]}</li>`); graph.highlight([r.path[i]], 'cur');
+    for (const k in gIn) gIn[k].highlight(names.includes(k) ? [pr[names.indexOf(k)].path[i]] : [], 'cur');
     if (++i < rows.length) { timer = setTimeout(tick, 450); return; }
-    $('#verdict').innerHTML = `<div class="${r.accepted ? 'ok' : 'err'}"><b>${r.accepted ? 'ACCEPTED' : 'REJECTED'}</b> — final state ${esc(r.path[r.path.length - 1])} is ${r.accepted ? '' : 'not '}in the accepting set ${fmt(res.accept)}.</div>`;
+    $('#verdict').innerHTML = `<div class="${r.accepted ? 'ok' : 'err'}"><b>${r.accepted ? 'ACCEPTED' : 'REJECTED'}</b> — final state ${esc(r.path[r.path.length - 1])} is ${r.accepted ? '' : 'not '}in the accepting set ${fmt(res.accept)}.</div>
+      <p class="why">${why}</p>`;
   })();
 }
 $('#run').onclick = () => testString($('#str').value.trim());
 $('#str').onkeydown = e => { if (e.key === 'Enter') $('#run').click(); };
-$('#samples').onclick = e => { if (e.target.classList.contains('chip')) { const t = e.target.textContent === 'ε' ? '' : e.target.textContent; $('#str').value = t; testString(t); } };
+const chipRun = e => { if (e.target.classList.contains('chip')) { const t = e.target.textContent === 'ε' ? '' : e.target.textContent; $('#str').value = t; testString(t); } };
+$('#samples').onclick = chipRun; $('#lang').onclick = chipRun;
 /* ---------- start-up ---------- */
-showTab('home');
+showTab(['home', 'sim', 'theory'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
 fetch('/api/examples').then(r => r.json()).then(ex => {
-  EXAMPLES = ex; edA = Editor($('#edA'), rebuild, ex[0].m); edB = Editor($('#edB'), rebuild, ex[1].m); selectOp('union');
-}).catch(() => document.body.insertAdjacentHTML('afterbegin', '<div class="err" style="margin:16px">Python server not reachable. Start it with <code>python app.py</code> and open http://127.0.0.1:8000</div>'));
+  EXAMPLES = ex; edA = Editor($('#edA'), rebuild, ex[0].m); edB = Editor($('#edB'), rebuild, ex[1].m, () => edA.get().alphabet); selectOp('union');
+}).catch(() => document.body.insertAdjacentHTML('afterbegin', '<div class="err" style="margin:16px">Python server not reachable. Start it with <code>python app.py</code> and open the address it prints</div>'));
