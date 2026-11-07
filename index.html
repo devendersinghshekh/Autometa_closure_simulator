@@ -17,6 +17,10 @@
     <div class="card"><h2>Machine A</h2><div id="edA" class="editor"></div><div class="gwrap mini"><svg id="svgA" class="graph"></svg></div></div>
     <div class="card" id="cardB"><h2>Machine B</h2><div id="edB" class="editor"></div><div class="gwrap mini"><svg id="svgB" class="graph"></svg></div></div>
   </div>
+  <div class="card"><h2>Test strings on Machine A and B</h2>
+    <p class="muted">See which strings each input machine accepts, before any operation. Separate several strings with spaces (ε = empty string).</p>
+    <div class="row"><input id="strAB" placeholder="e.g. ε 0 10 101 110"><button id="runAB" class="primary">Test</button></div>
+    <div id="samplesAB" class="chips"></div><div id="traceAB" class="scroll"></div></div>
   <div class="card"><h2>Operation</h2><div id="opsel" class="seg"></div><p id="opdesc" class="muted"></p><div id="msg"></div></div>
   <div id="result" hidden>
     <div class="card"><h2 id="restitle">Resulting DFA</h2><div id="stats" class="stats"></div><div id="lang"></div>

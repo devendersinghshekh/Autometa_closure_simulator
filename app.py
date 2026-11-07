@@ -38,6 +38,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(L.build(data["A"], data["B"], data["op"]))
             if self.path == "/api/run":
                 return self._json(L.run(data["machine"], data["text"]))
+            
+            if self.path == "/api/test_inputs":   # strings tested on Machine A and B themselves
+                return self._json(L.test_strings(data["A"], data["B"], data["texts"]))
+            
         except Exception as e:  # malformed request: answer with JSON instead of dropping the connection
             return self._json({"errors": [f"Server error: {e!r}"], "error": f"Server error: {e!r}"})
         self._send(b"Not found", "text/plain", 404)

@@ -165,6 +165,21 @@ def run(m, text):
         path.append(m["delta"][path[-1]][c])
     return {"syms": symbols, "path": path, "accepted": path[-1] in m["accept"]}
 
+def test_strings(A, B, texts):
+    """Run each string on Machine A and on Machine B separately (no operation applied).
+    A machine with missing transitions is completed with a trap state first, so the answer
+    matches the language it defines. Returns {"A": ..., "B": ...}; each side is either
+    {"errors": [...]} (machine not valid yet) or {"dead": name or None, "results": [run(...), ...]}."""
+    out = {}
+    for key, m in (("A", A), ("B", B)):
+        errors = validate(m, f"Machine {key}")
+        if errors:
+            out[key] = {"errors": errors}
+            continue
+        full, dead = complete(m)
+        out[key] = {"dead": dead, "results": [run(full, t) for t in texts]}
+    return out
+
 
 def _m(states, start, accept, rows):
     return {"states": states, "alphabet": ["0", "1"], "start": start, "accept": accept,

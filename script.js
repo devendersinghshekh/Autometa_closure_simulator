@@ -11,7 +11,7 @@ const OPINFO = {
   difference: ['A − B', 'Accepted if A accepts and B rejects. Product construction, accept when qA ∈ F_A AND qB ∉ F_B.'],
 };
 const emptyM = () => ({ states: [], alphabet: ['0', '1'], start: '', accept: [], delta: {} });
-let EXAMPLES = [], edA, edB, op = 'union', res = null, parts = null, graph = null, gIn = {}, timer = null, seq = 0;
+let EXAMPLES = [], edA, edB, op = 'union', res = null, parts = null, graph = null, gIn = {}, timer = null, seq = 0, abTexts = null, abSeq = 0;
 const eps = s => s === '' ? 'ε' : s;
 /* strings over Σ in length-then-alphabet order: ε, a, b, aa, ab, … */
 function samples(alpha, n) { const out = [''], q = ['']; while (out.length < n && q.length) { const w = q.shift(); if (w.length >= 4) break; for (const a of alpha) { q.push(w + a); out.push(w + a); } } return out.slice(0, n); }
@@ -84,7 +84,11 @@ document.querySelectorAll('#opcards .op').forEach(c => c.onclick = () => { showT
 document.querySelectorAll('#opsel button').forEach(b => b.onclick = () => selectOp(b.dataset.op));
 
 /* ---------- drawing: the two input machines (as edited, possibly incomplete) and the result ---------- */
-function drawInputs() { if (edA) gIn = { A: Graph.draw($('#svgA'), edA.get()), B: Graph.draw($('#svgB'), edB.get()) }; }
+function drawInputs() {
+  if (!edA) return;
+  gIn = { A: Graph.draw($('#svgA'), edA.get()), B: Graph.draw($('#svgB'), edB.get()) };
+  $('#samplesAB').innerHTML = samples(edA.get().alphabet, 8).map(s => `<button class="chip">${esc(eps(s))}</button>`).join('');
+}
 function drawAll() { drawInputs(); if (res && !$('#result').hidden) graph = Graph.draw($('#svg'), res); }
 
 /* ---------- build (Python does the work) ---------- */
@@ -96,7 +100,7 @@ async function rebuild() {
   $('#result').hidden = !!r.errors;
   $('#msg').innerHTML = r.errors ? '<div class="err"><b>Cannot construct yet:</b><ul>' + r.errors.map(e => `<li>${esc(e)}</li>`).join('') + '</ul></div>'
     : r.notes.map(n => `<div class="note">${esc(n)}</div>`).join('');
-  if (r.errors) return;
+  if (r.errors) { refreshAB(); return; }
   $('#restitle').textContent = `Resulting DFA — ${op[0].toUpperCase() + op.slice(1)} (${OPINFO[op][0]})`;
   res = r.machine; parts = r.parts; graph = Graph.draw($('#svg'), res);
   const { pairs, accepted, rejected } = r.info;
@@ -108,6 +112,7 @@ async function rebuild() {
   $('#table').innerHTML = r.table_html;
   $('#samples').innerHTML = samples(res.alphabet, 10).map(s => `<button class="chip">${esc(eps(s))}</button>`).join('');
   $('#trace').innerHTML = '';
+  refreshAB();
 }
 /* ---------- string testing: path computed by Python, animated here ---------- */
 async function testString(str) {
@@ -132,6 +137,31 @@ $('#run').onclick = () => testString($('#str').value.trim());
 $('#str').onkeydown = e => { if (e.key === 'Enter') $('#run').click(); };
 const chipRun = e => { if (e.target.classList.contains('chip')) { const t = e.target.textContent === 'ε' ? '' : e.target.textContent; $('#str').value = t; testString(t); } };
 $('#samples').onclick = chipRun; $('#lang').onclick = chipRun;
+/* ---------- strings tested on the input machines A and B (independent of the operation) ---------- */
+const toks = v => { const t = v.split(/[\s,]+/).filter(Boolean).map(x => x === 'ε' ? '' : x); return t.length ? t : ['']; };
+const verdict = ok => `<span class="${ok ? 'okc' : 'errc'}">${ok ? '✓ accepts' : '✗ rejects'}</span>`;
+function refreshAB() { if (abTexts) testInputs(abTexts); }          // keep the table in sync after any edit
+async function testInputs(texts) {
+  abTexts = texts; const id = ++abSeq;
+  const r = await post('/api/test_inputs', { A: edA.get(), B: edB.get(), texts });
+  const withOp = res && !$('#result').hidden;                       // add a column for the operation result when it exists
+  const rr = withOp ? await Promise.all(texts.map(t => post('/api/run', { machine: res, text: t }))) : null;
+  if (id !== abSeq) return;
+  const cell = (side, i) => {
+    if (r[side].errors) return '<td class="muted">—</td>';
+    const x = r[side].results[i];
+    return x.error ? `<td class="errc">${esc(x.error)}</td>` : `<td>${verdict(x.accepted)}<div class="path">${x.path.map(esc).join(' → ')}</div></td>`;
+  };
+  const errs = ['A', 'B'].flatMap(k => r[k].errors || []), dead = ['A', 'B'].filter(k => r[k].dead).map(k => `Machine ${k}: missing transitions go to trap state '${esc(r[k].dead)}'`);
+  const count = k => r[k].errors ? '' : `<span>${k} accepts <b>${r[k].results.filter(x => x.accepted).length}</b> of ${texts.length}</span>`;
+  $('#traceAB').innerHTML = (errs.length ? `<div class="err"><ul>${errs.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : '')
+    + `<table class="t" style="margin-top:10px"><tr><th>String</th><th>Machine A</th><th>Machine B</th>${withOp ? `<th>${esc(OPINFO[op][0])} result</th>` : ''}</tr>`
+    + texts.map((t, i) => `<tr><td><code>${esc(eps(t))}</code></td>${cell('A', i)}${cell('B', i)}${withOp ? (rr[i].error ? '<td class="muted">—</td>' : `<td>${verdict(rr[i].accepted)}</td>`) : ''}</tr>`).join('') + '</table>'
+    + `<div class="stats" style="margin-top:8px">${count('A')}${count('B')}</div>` + (dead.length ? `<p class="muted">${dead.join(' · ')}</p>` : '');
+}
+$('#runAB').onclick = () => testInputs(toks($('#strAB').value.trim()));
+$('#strAB').onkeydown = e => { if (e.key === 'Enter') $('#runAB').click(); };
+$('#samplesAB').onclick = e => { if (e.target.classList.contains('chip')) { const cur = $('#strAB').value.trim(); $('#strAB').value = cur ? cur + ' ' + e.target.textContent : e.target.textContent; $('#runAB').click(); } };
 /* ---------- start-up ---------- */
 showTab(['home', 'sim', 'theory'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
 fetch('/api/examples').then(r => r.json()).then(ex => {
