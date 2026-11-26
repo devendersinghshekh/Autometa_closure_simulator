@@ -62,7 +62,7 @@ def complete(m):
 
 
 # ---------------------------------------------------------------- operations
-def product(A, B, op):
+def product(A, B, op, trace=None):
     """Product construction for union / intersection / difference.
     Explores only reachable pairs using BFS (the list 'states' is also the queue)."""
     _, rule, _ = OPS[op]
@@ -76,10 +76,13 @@ def product(A, B, op):
         for a in A["alphabet"]:
             t_pair = (A["delta"][p][a], B["delta"][q][a])
             t = label(*t_pair)
-            if t not in pair:                  # newly discovered reachable state
+            is_new = t not in pair
+            if is_new:                         # newly discovered reachable state
                 pair[t] = t_pair
                 states.append(t)
             delta[s][a] = t
+            if trace is not None:              # record the step for the "construction steps" panel
+                trace.append({"from": s, "p": p, "q": q, "sym": a, "tp": t_pair[0], "tq": t_pair[1], "to": t, "new": is_new})
         i += 1
     # accepting rule decides which product states are final
     accept = [s for s in states if rule(pair[s][0] in A["accept"], pair[s][1] in B["accept"])]
@@ -125,6 +128,51 @@ def table_html(m):
             "<p class='muted'>→ start state, * accepting state</p>")
 
 
+
+# ---------------------------------------------------------------- step-by-step explanation + validation
+def final_table(A, B, R, op):
+    """Rows explaining WHY each product state is final (or not): A accepts?, B accepts?, rule -> final?"""
+    rows = []
+    for s in R["states"]:
+        p, q = s[1:-1].split(", ")
+        rows.append({"state": s, "inA": p in A["accept"], "inB": q in B["accept"], "final": s in R["accept"]})
+    return rows
+
+
+def complement_table(A, R):
+    """Rows for the complement: every state keeps its transitions, only the final flag flips."""
+    return [{"state": s, "wasFinal": s in A["accept"], "final": s in R["accept"]} for s in A["states"]]
+
+
+def expected_accepts(op, a, b):
+    """The theoretical definition of each operation, written independently of the construction."""
+    return {"union": a or b, "intersection": a and b, "difference": a and not b, "complement": not a}[op]
+
+
+def verify(R, A, B, op, cap=20000):
+    """Compare the constructed DFA with the DEFINITION of the operation on every string up to a length
+    (the longest length that keeps the number of strings under 'cap', at most 8).
+    Returns {max_len, tested, mismatches:[...], rows:[...]}; rows are the first strings, for display."""
+    import itertools
+    alpha = list(R["alphabet"])
+    max_len, total = 0, 1
+    while max_len < 8 and total + len(alpha) ** (max_len + 1) <= cap:
+        max_len += 1
+        total += len(alpha) ** max_len
+    tested, mismatches, rows = 0, [], []
+    for n in range(max_len + 1):
+        for tup in itertools.product(alpha, repeat=n):
+            w = "".join(tup)
+            a = run(A, w)["accepted"]
+            b = run(B, w)["accepted"] if B is not None else False
+            want, got = expected_accepts(op, a, b), run(R, w)["accepted"]
+            tested += 1
+            if want != got and len(mismatches) < 5:
+                mismatches.append(w)
+            if len(rows) < 10:
+                rows.append({"w": w, "a": a, "b": b if B is not None else None, "want": want, "got": got})
+    return {"max_len": max_len, "tested": tested, "mismatches": mismatches, "ok": not mismatches, "rows": rows}
+
 # ---------------------------------------------------------------- main entry points
 def build(A, B, op):
     """Validate, complete, construct. Returns {"errors": [...]} or
@@ -145,13 +193,19 @@ def build(A, B, op):
         notes.append(f"Machine A had missing transitions, so it was completed with a non-accepting trap state '{dead_a}'.")
     if op == "complement":
         R, parts, pairs = complement(A), {"A": A}, None
+        steps = {"kind": "complement", "table": complement_table(A, R)}
+        Bv = None
     else:
         B, dead_b = complete(B)
         if dead_b:
             notes.append(f"Machine B had missing transitions, so it was completed with a non-accepting trap state '{dead_b}'.")
-        R, parts, pairs = product(A, B, op), {"A": A, "B": B}, len(A["states"]) * len(B["states"])
+        trace = []
+        R, parts, pairs = product(A, B, op, trace), {"A": A, "B": B}, len(A["states"]) * len(B["states"])
+        steps = {"kind": "product", "start": R["start"], "moves": trace, "table": final_table(A, B, R, op), "rule": OPS[op][2]}
+        Bv = B
     info = {"pairs": pairs, "accepted": shortest(R, True), "rejected": shortest(R, False)}
-    return {"machine": R, "table_html": table_html(R), "notes": notes, "parts": parts, "info": info}
+    return {"machine": R, "table_html": table_html(R), "notes": notes, "parts": parts, "info": info,
+            "steps": steps, "validation": verify(R, A, Bv, op)}
 
 
 def run(m, text):

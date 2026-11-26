@@ -14,6 +14,8 @@ CSET302 (Automata Theory and Computability), Topic 15. A local web app where you
 | Completion of missing transitions with a non-accepting trap state (with a note shown to the user) | `dfa_logic.complete` |
 | Union / intersection / difference by the product construction over reachable pairs (BFS) | `dfa_logic.product` |
 | Complement by swapping the final states of the completed DFA | `dfa_logic.complement` |
+| Construction steps: every BFS move (new / already seen) and why each pair-state is final (or the complement's flipped finals) | `dfa_logic.build` → `steps`, `script.js` (`renderSteps`) |
+| Validation report: the result is compared with the definition of the operation on all short strings (≤ 20 000), expected vs generated | `dfa_logic.verify`, `script.js` (`renderValidation`) |
 | Language facts: shortest accepted and rejected strings, L = ∅ and L = Σ* detection, reachable vs. \|Q_A\|·\|Q_B\| pairs | `dfa_logic.shortest`, `build` → `info` |
 | SVG drawing (BFS layered layout, merged parallel edges, self-loops, start arrow, double circles) | `graph.js` |
 | Live diagrams of Machine A and Machine B under their editors, drawn as edited (missing transitions omitted, works before the machine is valid) | `script.js` (`drawInputs`), `graph.js` |
@@ -49,7 +51,7 @@ The browser never computes automata. It sends the machines as JSON, and Python v
 ├── script.js          editors, operation picker, build/run calls, stats, trace animation
 ├── graph.js           Graph.draw(svg, machine) → { highlight(states, cls) }
 ├── style.css          design tokens (light + dark) and all styles
-└── CSET302 Milestone 1 – Regular Language Closure Operations Simulator.docx   design-review report
+└── CSET302_Milestone_1_Report_REVIEWED.docx   design-review report (M1)
 ```
 
 ## Layer breakdown
@@ -106,7 +108,7 @@ State names must not contain `(`, `)` or `,`, because those characters are used 
 | Endpoint | Request | Response |
 |---|---|---|
 | `GET /api/examples` | none | `[{name, m}]` |
-| `POST /api/build` | `{A, B, op}`, where `op` ∈ union, intersection, complement, difference (B is ignored for complement) | `{errors: [str]}` **or** `{machine, table_html, notes: [str], parts: {A, B?}, info: {pairs, accepted, rejected}}` |
+| `POST /api/build` | `{A, B, op}`, where `op` ∈ union, intersection, complement, difference (B is ignored for complement) | `{errors: [str]}` **or** `{machine, table_html, notes: [str], parts: {A, B?}, info: {pairs, accepted, rejected}, steps, validation}` |
 | `POST /api/run` | `{machine, text}` | `{syms, path, accepted}` **or** `{error}` |
 
 `parts` holds the *completed* input machines. In `info`, `pairs` is \|Q_A\|·\|Q_B\| (`null` for complement), and `accepted`/`rejected` are the shortest strings (`""` = ε, `null` = none exists). There is no database.

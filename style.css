@@ -31,3 +31,4 @@ input,select{border:1px solid var(--bd);border-radius:6px;padding:4px 6px;backgr
 .node.hl circle{fill:var(--hl);stroke:var(--hlbd)}.node.cur circle{fill:var(--cur);stroke:var(--ac)}
 .chips{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.chip{border-radius:99px;padding:2px 12px;font-family:var(--mono)}.ok-chip{border-color:var(--okbd);color:var(--ok)}.err-chip{border-color:var(--erbd);color:var(--er)}
 .trace{padding-left:20px}.trace li{animation:in .3s}.trace code,.trace b{font-family:var(--mono)}@keyframes in{from{opacity:0;transform:translateX(-6px)}}
+#steps h3{font-size:15px;margin:16px 0 6px;color:var(--ink)}

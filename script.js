@@ -7,7 +7,7 @@ const post = (url, body) => fetch(url, { method: 'POST', body: JSON.stringify(bo
 const OPINFO = {
   union: ['A ∪ B', 'Accepted if A or B accepts. Product construction, accept when qA ∈ F_A OR qB ∈ F_B.'],
   intersection: ['A ∩ B', 'Accepted only if both accept. Product construction, accept when qA ∈ F_A AND qB ∈ F_B.'],
-  complement: ['A̅', 'Accepted if A rejects (relative to Σ*). Same DFA with accepting states swapped. Only Machine A is used.'],
+  complement: ['Ā', 'Accepted if A rejects (relative to Σ*). Same DFA with accepting states swapped. Only Machine A is used.'],
   difference: ['A − B', 'Accepted if A accepts and B rejects. Product construction, accept when qA ∈ F_A AND qB ∉ F_B.'],
 };
 const emptyM = () => ({ states: [], alphabet: ['0', '1'], start: '', accept: [], delta: {} });
@@ -110,9 +110,31 @@ async function rebuild() {
     : rejected === null ? '<div class="note"><b>L = Σ*</b> — every string is accepted (no rejecting state is reachable).</div>'
     : `<p class="muted">Shortest accepted: <button class="chip ok-chip">${esc(eps(accepted))}</button> · shortest rejected: <button class="chip err-chip">${esc(eps(rejected))}</button></p>`;
   $('#table').innerHTML = r.table_html;
+  renderSteps(r); renderValidation(r.validation);
   $('#samples').innerHTML = samples(res.alphabet, 10).map(s => `<button class="chip">${esc(eps(s))}</button>`).join('');
   $('#trace').innerHTML = '';
   refreshAB();
+}
+/* ---------- construction steps + validation (data computed by Python, only displayed here) ---------- */
+const yn = b => b ? 'yes' : 'no';
+function renderSteps(r) {
+  const st = r.steps;
+  if (st.kind === 'complement') {
+    $('#stepsintro').innerHTML = 'Complement: the DFA is first made complete, then <b>every state keeps its transitions</b> and only the final-state flag is flipped (F′ = Q − F).';
+    $('#steps').innerHTML = '<table class="t"><tr><th>State</th><th>Final in A?</th><th>Final in complement?</th></tr>' + st.table.map(x => `<tr><td><b>${esc(x.state)}</b></td><td>${yn(x.wasFinal)}</td><td>${yn(x.final)}</td></tr>`).join('') + '</table>';
+    return;
+  }
+  $('#stepsintro').innerHTML = `Product construction by BFS from the start pair <b>${esc(st.start)}</b>. Each move is δ((p, q), a) = (δ<sub>A</sub>(p, a), δ<sub>B</sub>(q, a)). Final-state rule: <b>${esc(st.rule)}</b>.`;
+  $('#steps').innerHTML = '<h3>1. Transitions (in the order discovered)</h3><table class="t"><tr><th>#</th><th>From</th><th>Symbol</th><th>δ<sub>A</sub></th><th>δ<sub>B</sub></th><th>To</th><th></th></tr>'
+    + st.moves.map((m, i) => `<tr><td>${i + 1}</td><td>${esc(m.from)}</td><td><code>${esc(m.sym)}</code></td><td>${esc(m.p)} → ${esc(m.tp)}</td><td>${esc(m.q)} → ${esc(m.tq)}</td><td><b>${esc(m.to)}</b></td><td class="${m.new ? 'okc' : 'muted'}">${m.new ? 'new state' : 'already seen'}</td></tr>`).join('') + '</table>'
+    + '<h3>2. Which pair-states are final</h3><table class="t"><tr><th>Pair-state</th><th>A accepts?</th><th>B accepts?</th><th>Final?</th></tr>'
+    + st.table.map(x => `<tr><td><b>${esc(x.state)}</b></td><td>${yn(x.inA)}</td><td>${yn(x.inB)}</td><td class="${x.final ? 'okc' : 'errc'}">${yn(x.final)}</td></tr>`).join('') + '</table>';
+}
+function renderValidation(v) {
+  const bin = op === 'complement';
+  $('#validation').innerHTML = `<div class="${v.ok ? 'ok' : 'err'}"><b>${v.ok ? 'PASSED' : 'FAILED'}</b> — the constructed DFA was compared with the definition of the operation on all <b>${v.tested}</b> strings of length 0 to ${v.max_len}${v.ok ? '; no mismatch.' : `. Mismatches: ${v.mismatches.map(w => esc(eps(w))).join(', ')}`}</div>
+    <div class="scroll"><table class="t" style="margin-top:10px"><tr><th>String</th><th>A</th>${bin ? '' : '<th>B</th>'}<th>Expected (${esc(OPINFO[op][0])})</th><th>Generated DFA</th><th>Match</th></tr>`
+    + v.rows.map(x => `<tr><td><code>${esc(eps(x.w))}</code></td><td>${yn(x.a)}</td>${bin ? '' : `<td>${yn(x.b)}</td>`}<td>${yn(x.want)}</td><td>${yn(x.got)}</td><td class="${x.want === x.got ? 'okc' : 'errc'}">${x.want === x.got ? '✓' : '✗'}</td></tr>`).join('') + '</table></div>';
 }
 /* ---------- string testing: path computed by Python, animated here ---------- */
 async function testString(str) {

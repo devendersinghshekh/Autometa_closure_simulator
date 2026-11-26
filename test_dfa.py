@@ -73,5 +73,28 @@ class Tests(unittest.TestCase):
         self.assertEqual(L.build(EX[0], EX[2], "union")["info"]["pairs"], 6)
 
 
+    def test_construction_steps(self):
+        # the steps panel must describe exactly the machine that was built (example from the M1 report, 4.3)
+        out = L.build(EX[0], EX[1], "union")
+        moves, st = out["steps"]["moves"], out["steps"]
+        self.assertEqual(len(moves), 4 * 2)                                     # 4 reachable pairs x |Sigma| = 2
+        self.assertEqual([m["to"] for m in moves if m["new"]], ["(q1, e)", "(q0, o)", "(q1, o)"])
+        self.assertEqual({x["state"] for x in st["table"] if x["final"]}, {"(q0, e)", "(q1, e)", "(q1, o)"})
+        inter = L.build(EX[0], EX[1], "intersection")["steps"]["table"]
+        self.assertEqual([x["state"] for x in inter if x["final"]], ["(q1, e)"])
+        comp = L.build(EX[0], None, "complement")["steps"]
+        self.assertEqual([x["state"] for x in comp["table"] if x["final"]], ["q0"])
+
+    def test_validation_report(self):
+        for op in ("union", "intersection", "difference", "complement"):
+            v = L.build(EX[2], EX[3], op)["validation"]
+            self.assertTrue(v["ok"], op)
+            self.assertEqual(v["tested"], 2 ** (v["max_len"] + 1) - 1)
+        # a wrong machine must be caught by verify()
+        A, B = EX[0], EX[1]
+        wrong = L.product(A, B, "union"); wrong["accept"] = []
+        self.assertFalse(L.verify(wrong, A, B, "union")["ok"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
